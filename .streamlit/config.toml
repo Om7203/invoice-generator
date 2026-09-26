@@ -1,0 +1,22 @@
+# Keep the viewer's Light / Dark / System preference; don't force a base theme.
+[theme]
+font = "sans serif"
+showWidgetBorder = true
+baseRadius = "0.75rem"
+buttonRadius = "0.75rem"
+
+[theme.light]
+primaryColor = "#087F82"
+backgroundColor = "#F7FAFC"
+secondaryBackgroundColor = "#EAF1F5"
+textColor = "#172B3A"
+borderColor = "#B8C9D4"
+linkColor = "#086B70"
+
+[theme.dark]
+primaryColor = "#087F82"
+backgroundColor = "#101923"
+secondaryBackgroundColor = "#1C2A38"
+textColor = "#EDF4F8"
+borderColor = "#536B7F"
+linkColor = "#70E0D4"

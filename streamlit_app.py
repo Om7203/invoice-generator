@@ -333,10 +333,11 @@ def share_component(pdf_bytes, filename, invoice_no, language):
     fallback = html.escape(t("download", language))
     html_block = f"""
     <style>
-      body {{ margin:0; font-family:Arial,sans-serif; }}
-      button {{ border:0; border-radius:10px; padding:11px 14px; background:#159a9c; color:#fff; font-size:14px; font-weight:700; cursor:pointer; }}
-      a {{ display:none; margin-left:8px; color:#1e3d59; }}
-      #status {{ margin-top:8px; font-size:12px; color:#64748b; }}
+      body {{ margin:0; padding:10px; box-sizing:border-box; border-radius:12px; background:#1C2A38; color:#EDF4F8; font-family:Arial,sans-serif; }}
+      button {{ border:0; border-radius:10px; padding:12px 14px; background:#45D0C1; color:#101923; font-size:14px; font-weight:700; cursor:pointer; min-height:48px; }}
+      button:focus-visible, a:focus-visible {{ outline:3px solid #EDF4F8; outline-offset:3px; }}
+      a {{ display:none; margin-left:8px; color:#70E0D4; }}
+      #status {{ margin-top:8px; font-size:13px; line-height:1.5; color:#EDF4F8; }}
     </style>
     <button id="share">{button_label}</button><a id="fallback" download="{html.escape(filename)}">{fallback}</a>
     <div id="status"></div>
@@ -367,7 +368,7 @@ def share_component(pdf_bytes, filename, invoice_no, language):
       }});
     </script>
     """
-    components.html(html_block, height=76)
+    components.html(html_block, height=160, scrolling=True)
 
 
 def export_xlsx(rows):
@@ -490,11 +491,9 @@ def monthly_report(store, language):
 def main():
     st.set_page_config(page_title="Pure Invoice Generator", page_icon="🧾", layout="centered")
     st.markdown("""<style>
-      .stApp {background:#f4f6f9; color:#1e293b;}
       .block-container {max-width:850px; padding-top:2rem;}
       div[data-testid="stVerticalBlockBorderWrapper"] {border-radius:16px;}
       div.stButton > button, div.stDownloadButton > button {min-height:52px; border-radius:12px; font-weight:600;}
-      button[kind="primary"] {background:#137f81; border-color:#137f81; color:white;}
       input {font-size:18px !important;}
       @media(max-width:600px) {.block-container {padding:1rem;}}
     </style>""", unsafe_allow_html=True)

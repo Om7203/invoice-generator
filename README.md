@@ -39,6 +39,12 @@ The current layout supports one line item and fixed 2.5% CGST plus 2.5% SGST. A 
 
 ## Monthly reporting
 
+## Appearance
+
+The app supports Streamlit's Light, Dark and System appearance options. The checked-in `.streamlit/config.toml` defines matching light and dark palettes without forcing a light background. The embedded PDF sharing panel uses its own high-contrast navy surface in either mode. This requires Streamlit 1.52 or newer. After deployment, check Settings → Theme in both modes, including dropdowns, reports and PDF download controls.
+
+## Monthly reporting
+
 Choose Monthly report, then a month and year. The default is the current month in India. Reports use invoice date rather than creation date, so backdated invoices appear in the correct period. The screen shows total billed (including tax and rounding), meters, invoice count, taxable value, CGST, SGST, customer totals and every matching invoice. Download monthly Excel ledger exports those invoice records with their stored financial values. No payment tracking is included.
 
 History displays 20 invoices per page. Its Excel backup includes all records, and monthly exports include all records in the selected month. Database reads are paginated to avoid the previous 100-record limit and server response caps. Reports include only invoices saved in this app, not historical desktop files that have not been imported. Download and retain periodic Excel backups yourself; exporting does not schedule automatic backups.

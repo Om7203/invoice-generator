@@ -1,0 +1,12 @@
+[
+  {
+    "name": "EXAMPLE CUSTOMER",
+    "gstin": "GSTIN-PLACEHOLDER",
+    "state": "Gujarat",
+    "state_code": "24",
+    "descriptions": ["EXAMPLE JOB WORK"],
+    "description_rates": {"EXAMPLE JOB WORK": 1.0},
+    "hsn": "998821",
+    "default_rate": 1.0
+  }
+]

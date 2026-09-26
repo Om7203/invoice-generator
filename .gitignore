@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.streamlit/secrets.toml
+local_data/
+*.db
+*.sqlite
+*.pdf
+*.xlsx
+*.xls
+*.csv
+.env

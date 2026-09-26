@@ -459,26 +459,29 @@ def main():
 
     if st.session_state.pop("customer_saved", False):
         st.success("ગ્રાહક સાચવાયો." if language == "gu" else "Customer saved and selected.")
+    st.subheader(t("new", language))
+    if "entry_invoice_no" not in st.session_state:
+        st.session_state.entry_invoice_no = store.next_invoice_number()
+    col1, col2 = st.columns(2)
+    with col1:
+        invoice_no = st.text_input(t("invoice_no", language), key="entry_invoice_no")
+    with col2:
+        invoice_date = st.date_input(t("invoice_date", language), value=date.today(), key="entry_date")
+    qty = st.number_input(t("quantity", language), min_value=0.01, value=1.0, step=0.01, key="entry_qty")
+    st.caption("ફક્ત નંબર, તારીખ અને મીટર દાખલ કરો. પછી ગ્રાહક અને વિગત પસંદ કરો." if language == "gu" else
+               "Enter only the invoice number, date and meters. Then choose the customer and description; the price is automatic.")
     customers = store.customers()
     if not customers:
-        st.info("નીચે પ્રથમ ગ્રાહક ઉમેરો." if language == "gu" else "Add your first customer below. You only need to do this once.")
+        st.info("હજુ ગ્રાહકો ઉમેરાયા નથી. જૂના ગ્રાહકો આયાત કરો અથવા નીચે નવો ગ્રાહક ઉમેરો." if language == "gu" else "No saved customers yet. Import your existing customers into the database once, or add a new customer below.")
         customer_form(store, language, expanded=True)
         return
     names = [item["name"] for item in customers]
-    if st.session_state.get("selected_customer") not in names:
-        st.session_state.selected_customer = names[0]
+    if st.session_state.get("customer_choice") not in names:
+        st.session_state.customer_choice = names[0]
+    if st.session_state.get("selected_customer") in names:
+        st.session_state.customer_choice = st.session_state.pop("selected_customer")
     with st.container(border=True):
-        st.subheader("1. " + t("choose_customer", language))
-        for index in range(0, len(names), 2):
-            for column, name in zip(st.columns(2), names[index:index + 2]):
-                with column:
-                    selected = st.session_state.selected_customer == name
-                    if st.button(("✓ " if selected else "") + name,
-                                 key="customer-" + name,
-                                 type="primary" if selected else "secondary", use_container_width=True):
-                        st.session_state.selected_customer = name
-                        st.rerun()
-    selected_name = st.session_state.selected_customer
+        selected_name = st.selectbox(t("choose_customer", language), names, key="customer_choice")
     customer = next(item for item in customers if item["name"] == selected_name)
     descriptions = customer.get("descriptions", [])
     if not descriptions:
@@ -486,27 +489,9 @@ def main():
         customer_form(store, language)
         return
     rates = customer.get("description_rates", {})
-    st.subheader("2. " + ("ઇન્વોઇસ વિગતો" if language == "gu" else "Invoice details"))
     selected_description = st.selectbox(t("description", language), descriptions, key="description-" + selected_name)
-    default_rate = float(rates.get(selected_description, customer.get("default_rate", 0)))
-    rate_context = (selected_name, selected_description)
-    if st.session_state.get("rate_context") != rate_context:
-        st.session_state.entry_rate = default_rate
-        st.session_state.rate_context = rate_context
-    if "entry_invoice_no" not in st.session_state:
-        st.session_state.entry_invoice_no = store.next_invoice_number()
-    col1, col2 = st.columns(2)
-    with col1:
-        qty = st.number_input(t("quantity", language), min_value=0.01, value=1.0, step=0.01, key="entry_qty")
-    with col2:
-        rate = st.number_input(t("rate", language), min_value=0.0, step=0.01, key="entry_rate")
-    st.caption("દર આપમેળે ભરાય છે. જરૂર હોય તો બદલો." if language == "gu" else "The saved rate is filled automatically. Change it only if needed.")
-    col1, col2 = st.columns(2)
-    with col1:
-        invoice_no = st.text_input(t("invoice_no", language), key="entry_invoice_no")
-    with col2:
-        invoice_date = st.date_input(t("invoice_date", language), value=date.today(), key="entry_date")
-    st.caption("ઇન્વોઇસ નંબર અને તારીખ બદલી શકો છો. PDF હંમેશા અંગ્રેજીમાં રહેશે." if language == "gu" else "You can change the invoice number and use a past date. The PDF stays in English.")
+    rate = float(rates.get(selected_description, customer.get("default_rate", 0)))
+    st.metric(t("rate", language), f"₹ {money(rate)}")
     taxable = round(qty * rate, 2)
     cgst = round(taxable * 0.025, 2)
     sgst = round(taxable * 0.025, 2)

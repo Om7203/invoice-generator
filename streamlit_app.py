@@ -388,34 +388,8 @@ def login_gate(language):
     return False
 
 
-def main():
-    st.set_page_config(page_title="Pure Invoice Generator", page_icon="🧾", layout="centered")
-    language = st.sidebar.selectbox("Language / ભાષા", ["en", "gu"], format_func=lambda value: "English" if value == "en" else "ગુજરાતી")
-    if not login_gate(language):
-        return
-
-    store = Store()
-    st.title(t("title", language))
-    st.caption(t("subtitle", language))
-    page = st.sidebar.radio("Menu", [t("new", language), t("history", language), t("add_customer", language)])
-
-    if page == t("history", language):
-        st.header(t("history", language))
-        rows = store.invoices()
-        if not rows:
-            st.info("No invoices yet.")
-        else:
-            for row in rows:
-                with st.expander(f"Invoice {row['invoice_no']} · {row['buyer_name']} · ₹ {money(row['total'])}"):
-                    st.write(f"{row['invoice_date']} · {row['sub_desc']} · {row['qty']:,.2f} MTR")
-                    pdf_bytes = store.pdf(row["id"])
-                    st.download_button(t("download", language), pdf_bytes, f"Invoice_{row['invoice_no']}.pdf", "application/pdf", key=f"history-download-{row['id']}")
-        if rows:
-            st.download_button(t("export", language), export_xlsx(rows), "Master_Sales_Ledger.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        return
-
-    if page == t("add_customer", language):
-        st.header(t("add_customer", language))
+def customer_form(store, language, expanded=False):
+    with st.expander("＋ " + t("add_customer", language), expanded=expanded):
         with st.form("customer-form"):
             name = st.text_input(t("customer_name", language))
             gstin = st.text_input(t("gstin", language))
@@ -437,28 +411,102 @@ def main():
                 else:
                     customer = {"name": name.strip().upper(), "gstin": gstin.strip().upper(), "state": state.strip() or "Gujarat", "state_code": state_code.strip() or "24", "hsn": hsn.strip() or "998821", "descriptions": descriptions, "description_rates": rates, "default_rate": default_rate}
                     store.save_customer(customer)
-                    st.success("Customer saved.")
+                    st.session_state.selected_customer = customer["name"]
+                    st.session_state.customer_saved = True
+                    st.rerun()
+
+
+def main():
+    st.set_page_config(page_title="Pure Invoice Generator", page_icon="🧾", layout="centered")
+    st.markdown("""<style>
+      .stApp {background:#f4f6f9; color:#1e293b;}
+      .block-container {max-width:850px; padding-top:2rem;}
+      div[data-testid="stVerticalBlockBorderWrapper"] {border-radius:16px;}
+      div.stButton > button, div.stDownloadButton > button {min-height:52px; border-radius:12px; font-weight:600;}
+      button[kind="primary"] {background:#137f81; border-color:#137f81; color:white;}
+      input {font-size:18px !important;}
+      @media(max-width:600px) {.block-container {padding:1rem;}}
+    </style>""", unsafe_allow_html=True)
+    language = st.radio("Language / ભાષા", ["en", "gu"], horizontal=True,
+                        format_func=lambda value: "English" if value == "en" else "ગુજરાતી",
+                        key="language")
+    if not login_gate(language):
         return
 
-    st.header(t("new", language))
+    store = Store()
+    if st.session_state.pop("reset_entry", False):
+        st.session_state.entry_invoice_no = store.next_invoice_number()
+        st.session_state.entry_qty = 1.0
+        st.session_state.entry_date = date.today()
+    st.title(t("title", language))
+    st.caption("ગ્રાહક પસંદ કરો → જથ્થો દાખલ કરો → PDF બનાવો" if language == "gu" else
+               "Choose customer → Enter quantity → Create PDF")
+    page = st.radio("મેનુ" if language == "gu" else "Menu", ["new", "history"],
+                    format_func=lambda value: t(value, language), horizontal=True, key="page")
+    if page == "history":
+        st.header(t("history", language))
+        rows = store.invoices()
+        if not rows:
+            st.info("હજુ કોઈ ઇન્વોઇસ નથી." if language == "gu" else "No invoices yet.")
+        for row in rows:
+            with st.expander(f"Invoice {row['invoice_no']} · {row['buyer_name']} · ₹ {money(row['total'])}"):
+                st.write(f"{row['invoice_date']} · {row['sub_desc']} · {row['qty']:,.2f} MTR")
+                pdf_bytes = store.pdf(row["id"])
+                st.download_button(t("download", language), pdf_bytes, f"Invoice_{safe_filename(row['invoice_no'])}.pdf", "application/pdf", key=f"history-download-{row['id']}")
+        if rows:
+            st.download_button(t("export", language), export_xlsx(rows), "Master_Sales_Ledger.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return
+
+    if st.session_state.pop("customer_saved", False):
+        st.success("ગ્રાહક સાચવાયો." if language == "gu" else "Customer saved and selected.")
     customers = store.customers()
     if not customers:
-        st.info("Add your first customer using the menu.")
+        st.info("નીચે પ્રથમ ગ્રાહક ઉમેરો." if language == "gu" else "Add your first customer below. You only need to do this once.")
+        customer_form(store, language, expanded=True)
         return
     names = [item["name"] for item in customers]
-    selected_name = st.selectbox(t("choose_customer", language), names)
+    if st.session_state.get("selected_customer") not in names:
+        st.session_state.selected_customer = names[0]
+    with st.container(border=True):
+        st.subheader("1. " + t("choose_customer", language))
+        for index in range(0, len(names), 2):
+            for column, name in zip(st.columns(2), names[index:index + 2]):
+                with column:
+                    selected = st.session_state.selected_customer == name
+                    if st.button(("✓ " if selected else "") + name,
+                                 key="customer-" + name,
+                                 type="primary" if selected else "secondary", use_container_width=True):
+                        st.session_state.selected_customer = name
+                        st.rerun()
+    selected_name = st.session_state.selected_customer
     customer = next(item for item in customers if item["name"] == selected_name)
     descriptions = customer.get("descriptions", [])
+    if not descriptions:
+        st.warning("This customer has no saved descriptions.")
+        customer_form(store, language)
+        return
     rates = customer.get("description_rates", {})
-    selected_description = st.selectbox(t("description", language), descriptions)
+    st.subheader("2. " + ("ઇન્વોઇસ વિગતો" if language == "gu" else "Invoice details"))
+    selected_description = st.selectbox(t("description", language), descriptions, key="description-" + selected_name)
     default_rate = float(rates.get(selected_description, customer.get("default_rate", 0)))
+    rate_context = (selected_name, selected_description)
+    if st.session_state.get("rate_context") != rate_context:
+        st.session_state.entry_rate = default_rate
+        st.session_state.rate_context = rate_context
+    if "entry_invoice_no" not in st.session_state:
+        st.session_state.entry_invoice_no = store.next_invoice_number()
     col1, col2 = st.columns(2)
     with col1:
-        invoice_no = st.text_input(t("invoice_no", language), value=store.next_invoice_number())
-        qty = st.number_input(t("quantity", language), min_value=0.01, value=1.0, step=0.01)
+        qty = st.number_input(t("quantity", language), min_value=0.01, value=1.0, step=0.01, key="entry_qty")
     with col2:
-        invoice_date = st.date_input(t("invoice_date", language), value=date.today())
-        rate = st.number_input(t("rate", language), min_value=0.0, value=default_rate, step=0.01)
+        rate = st.number_input(t("rate", language), min_value=0.0, step=0.01, key="entry_rate")
+    st.caption("દર આપમેળે ભરાય છે. જરૂર હોય તો બદલો." if language == "gu" else "The saved rate is filled automatically. Change it only if needed.")
+    col1, col2 = st.columns(2)
+    with col1:
+        invoice_no = st.text_input(t("invoice_no", language), key="entry_invoice_no")
+    with col2:
+        invoice_date = st.date_input(t("invoice_date", language), value=date.today(), key="entry_date")
+    st.caption("ઇન્વોઇસ નંબર અને તારીખ બદલી શકો છો. PDF હંમેશા અંગ્રેજીમાં રહેશે." if language == "gu" else "You can change the invoice number and use a past date. The PDF stays in English.")
     taxable = round(qty * rate, 2)
     cgst = round(taxable * 0.025, 2)
     sgst = round(taxable * 0.025, 2)
@@ -466,7 +514,7 @@ def main():
     round_off = round(total - taxable - cgst - sgst, 2)
     st.metric(t("total", language), f"₹ {money(total)}")
 
-    if st.button(t("create", language), type="primary"):
+    if st.button(t("create", language), type="primary", use_container_width=True):
         invoice_no = invoice_no.strip()
         if not invoice_no:
             st.error("Enter an invoice number.")
@@ -478,9 +526,20 @@ def main():
             record["pdf_base64"] = base64.b64encode(pdf_bytes).decode("ascii")
             invoice_id = store.save_invoice(record)
             filename = f"{safe_filename(customer['name'])}_{safe_filename(invoice_no)}_{invoice_date.strftime('%d-%b-%y')}.pdf"
-            st.success(f"Invoice {invoice_no} saved successfully.")
-            st.download_button(t("download", language), pdf_bytes, filename, "application/pdf", key=f"download-{invoice_id}")
-            share_component(pdf_bytes, filename, invoice_no, language)
+            st.session_state.last_invoice = (invoice_id, invoice_no, pdf_bytes, filename)
+
+    if "last_invoice" in st.session_state:
+        invoice_id, saved_no, pdf_bytes, filename = st.session_state.last_invoice
+        with st.container(border=True):
+            st.success(f"ઇન્વોઇસ {saved_no} સાચવાયું." if language == "gu" else f"Invoice {saved_no} saved. Your PDF is ready.")
+            st.download_button(t("download", language), pdf_bytes, filename, "application/pdf", key=f"download-{invoice_id}", use_container_width=True)
+            share_component(pdf_bytes, filename, saved_no, language)
+            if st.button(t("new", language), use_container_width=True):
+                st.session_state.pop("last_invoice", None)
+                # Widget values are reset on the next run, before widgets are created.
+                st.session_state.reset_entry = True
+                st.rerun()
+    customer_form(store, language)
 
 
 if __name__ == "__main__":

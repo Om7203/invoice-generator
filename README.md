@@ -37,8 +37,6 @@ This is an initial implementation, not a verified production release. Python syn
 
 The current layout supports one line item and fixed 2.5% CGST plus 2.5% SGST. A shared PIN provides basic access control, not individual accounts or robust brute-force protection. Supabase stores PDF bytes as base64 in the database for this small-use prototype, consuming more space than binary storage. Free hosting and database availability are subject to provider limits and inactivity pauses.
 
-## Monthly reporting
-
 ## Appearance
 
 The app supports Streamlit's Light, Dark and System appearance options. The checked-in `.streamlit/config.toml` defines matching light and dark palettes without forcing a light background. The embedded PDF sharing panel uses its own high-contrast navy surface in either mode. This requires Streamlit 1.52 or newer. After deployment, check Settings → Theme in both modes, including dropdowns, reports and PDF download controls.

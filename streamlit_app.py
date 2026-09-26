@@ -15,6 +15,8 @@ import sqlite3
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
+from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -244,12 +246,32 @@ class Store:
         conn.close()
         return row_id
 
-    def invoices(self):
+    def invoices(self, start=None, end=None):
         fields = "id,invoice_no,invoice_date,buyer_name,gstin,hsn,sub_desc,qty,rate,taxable,cgst,sgst,round_off,total,created_at"
         if self.remote:
-            return self.client.table("invoices").select(fields).order("invoice_date", desc=True).limit(100).execute().data or []
+            rows = []
+            offset = 0
+            while True:
+                query = self.client.table("invoices").select(fields).order("invoice_date", desc=True).order("id", desc=True)
+                if start:
+                    query = query.gte("invoice_date", start)
+                if end:
+                    query = query.lt("invoice_date", end)
+                batch = query.range(offset, offset + 499).execute().data or []
+                if not batch:
+                    return rows
+                rows.extend(batch)
+                offset += len(batch)
         conn = local_connection()
-        rows = [dict(row) for row in conn.execute("SELECT " + fields + " FROM invoices ORDER BY invoice_date DESC, id DESC LIMIT 100")]
+        conditions, params = [], []
+        if start:
+            conditions.append("invoice_date >= ?")
+            params.append(start)
+        if end:
+            conditions.append("invoice_date < ?")
+            params.append(end)
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = [dict(row) for row in conn.execute("SELECT " + fields + " FROM invoices" + where + " ORDER BY invoice_date DESC, id DESC", params)]
         conn.close()
         return rows
 
@@ -416,6 +438,55 @@ def customer_form(store, language, expanded=False):
                     st.rerun()
 
 
+def monthly_totals(rows):
+    """Aggregate saved invoice values without recalculating historic tax/rates."""
+    totals = {key: Decimal("0") for key in ("qty", "taxable", "cgst", "sgst", "total")}
+    customers = {}
+    for row in rows:
+        identity = (row["buyer_name"], row["gstin"])
+        customer = customers.setdefault(identity, {"Customer": identity[0], "GSTIN": identity[1], "Invoices": 0, "Meters": Decimal("0"), "Total billed (INR)": Decimal("0")})
+        customer["Invoices"] += 1
+        customer["Meters"] += Decimal(str(row["qty"]))
+        customer["Total billed (INR)"] += Decimal(str(row["total"]))
+        for key in totals:
+            totals[key] += Decimal(str(row[key]))
+    return totals, [customers[key] for key in sorted(customers)]
+
+
+def monthly_report(store, language):
+    gu = language == "gu"
+    st.header("માસિક રિપોર્ટ" if gu else "Monthly report")
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    left, right = st.columns(2)
+    with left:
+        year = int(st.number_input("વર્ષ" if gu else "Year", min_value=1900, max_value=9998, value=today.year, step=1))
+    with right:
+        month = st.selectbox("મહિનો" if gu else "Month", list(range(1, 13)), index=today.month - 1,
+                             format_func=lambda m: date(2000, m, 1).strftime("%m — %B"))
+    start = date(year, month, 1)
+    end = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+    rows = store.invoices(start.isoformat(), end.isoformat())
+    totals, customers = monthly_totals(rows)
+    st.caption("ઇન્વોઇસની તારીખ પ્રમાણે રિપોર્ટ. કુલ રકમમાં ટેક્સ સામેલ છે." if gu else
+               "Based on invoice date, including backdated invoices. Total billed includes tax and round-off.")
+    a, b, c = st.columns(3)
+    a.metric("કુલ બિલ" if gu else "Total billed", "₹ " + money(totals["total"]))
+    b.metric("કુલ મીટર" if gu else "Total meters", money(totals["qty"]))
+    c.metric("ઇન્વોઇસની સંખ્યા" if gu else "Invoice count", len(rows))
+    st.caption(("કરપાત્ર રકમ" if gu else "Taxable value") + f": ₹ {money(totals['taxable'])} · CGST: ₹ {money(totals['cgst'])} · SGST: ₹ {money(totals['sgst'])}")
+    if not rows:
+        st.info("આ મહિનામાં કોઈ ઇન્વોઇસ નથી." if gu else "No invoices for this month.")
+        return
+    st.subheader("ગ્રાહક પ્રમાણે કુલ" if gu else "Customer totals")
+    st.dataframe([{k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()} for row in customers], hide_index=True, use_container_width=True)
+    st.subheader("મહિનાના બધા ઇન્વોઇસ" if gu else "All invoices this month")
+    labels = {"invoice_no": "Invoice", "invoice_date": "Date", "buyer_name": "Customer", "sub_desc": "Description", "qty": "Meters", "rate": "Rate", "total": "Total billed (INR)"}
+    st.dataframe([{label: row[key] for key, label in labels.items()} for row in rows], hide_index=True, use_container_width=True)
+    st.download_button("માસિક એક્સેલ લેજર" if gu else "Download monthly Excel ledger",
+                       export_xlsx(rows), f"Sales_Ledger_{year}-{month:02d}.xlsx",
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+
 def main():
     st.set_page_config(page_title="Pure Invoice Generator", page_icon="🧾", layout="centered")
     st.markdown("""<style>
@@ -441,14 +512,19 @@ def main():
     st.title(t("title", language))
     st.caption("ગ્રાહક પસંદ કરો → જથ્થો દાખલ કરો → PDF બનાવો" if language == "gu" else
                "Choose customer → Enter quantity → Create PDF")
-    page = st.radio("મેનુ" if language == "gu" else "Menu", ["new", "history"],
-                    format_func=lambda value: t(value, language), horizontal=True, key="page")
+    page = st.radio("મેનુ" if language == "gu" else "Menu", ["new", "history", "monthly"],
+                    format_func=lambda value: ("માસિક રિપોર્ટ" if language == "gu" else "Monthly report") if value == "monthly" else t(value, language), horizontal=True, key="page")
+    if page == "monthly":
+        monthly_report(store, language)
+        return
     if page == "history":
         st.header(t("history", language))
         rows = store.invoices()
         if not rows:
             st.info("હજુ કોઈ ઇન્વોઇસ નથી." if language == "gu" else "No invoices yet.")
-        for row in rows:
+        page_count = max(1, (len(rows) + 19) // 20)
+        history_page = int(st.number_input("પાનું" if language == "gu" else "Page", min_value=1, max_value=page_count, value=1, step=1))
+        for row in rows[(history_page - 1) * 20:history_page * 20]:
             with st.expander(f"Invoice {row['invoice_no']} · {row['buyer_name']} · ₹ {money(row['total'])}"):
                 st.write(f"{row['invoice_date']} · {row['sub_desc']} · {row['qty']:,.2f} MTR")
                 pdf_bytes = store.pdf(row["id"])

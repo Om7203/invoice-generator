@@ -35,7 +35,13 @@ Set `APP_PIN` in `.streamlit/secrets.toml` before opening the app. See SETUP.md 
 
 This is an initial implementation, not a verified production release. Python syntax has been checked; deployment and real-phone PDF sharing still need testing. Streamlit embeds the share control in an iframe, whose permissions may prevent file sharing even on a browser that supports it. The PDF download button is the fallback.
 
-The current layout supports one line item and fixed 2.5% CGST plus 2.5% SGST. History and Excel export currently include only the latest 100 records. A shared PIN provides basic access control, not individual accounts or robust brute-force protection. Supabase stores PDF bytes as base64 in the database for this small-use prototype, consuming more space than binary storage. Free hosting and database availability are subject to provider limits and inactivity pauses.
+The current layout supports one line item and fixed 2.5% CGST plus 2.5% SGST. A shared PIN provides basic access control, not individual accounts or robust brute-force protection. Supabase stores PDF bytes as base64 in the database for this small-use prototype, consuming more space than binary storage. Free hosting and database availability are subject to provider limits and inactivity pauses.
+
+## Monthly reporting
+
+Choose Monthly report, then a month and year. The default is the current month in India. Reports use invoice date rather than creation date, so backdated invoices appear in the correct period. The screen shows total billed (including tax and rounding), meters, invoice count, taxable value, CGST, SGST, customer totals and every matching invoice. Download monthly Excel ledger exports those invoice records with their stored financial values. No payment tracking is included.
+
+History displays 20 invoices per page. Its Excel backup includes all records, and monthly exports include all records in the selected month. Database reads are paginated to avoid the previous 100-record limit and server response caps. Reports include only invoices saved in this app, not historical desktop files that have not been imported. Download and retain periodic Excel backups yourself; exporting does not schedule automatic backups.
 
 ## Free cloud deployment
 

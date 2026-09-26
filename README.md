@@ -29,6 +29,14 @@ streamlit run streamlit_app.py
 
 Without Supabase secrets, the app uses `local_data/`, which is ignored by Git. This is only for local testing.
 
+Set `APP_PIN` in `.streamlit/secrets.toml` before opening the app. See SETUP.md for the configuration format.
+
+## Current validation and limitations
+
+This is an initial implementation, not a verified production release. Python syntax has been checked; deployment and real-phone PDF sharing still need testing. Streamlit embeds the share control in an iframe, whose permissions may prevent file sharing even on a browser that supports it. The PDF download button is the fallback.
+
+The current layout supports one line item and fixed 2.5% CGST plus 2.5% SGST. History and Excel export currently include only the latest 100 records. A shared PIN provides basic access control, not individual accounts or robust brute-force protection. Supabase stores PDF bytes as base64 in the database for this small-use prototype, consuming more space than binary storage. Free hosting and database availability are subject to provider limits and inactivity pauses.
+
 ## Free cloud deployment
 
 Read [SETUP.md](SETUP.md). The short version is:

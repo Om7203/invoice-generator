@@ -189,7 +189,7 @@ class Store:
     def customers(self):
         if self.remote:
             response = self.client.table("customers").select("*").order("name").execute()
-            return response.data or EXAMPLE_CUSTOMERS
+            return response.data or []
         if not LOCAL_CUSTOMERS.exists():
             LOCAL_CUSTOMERS.write_text(json.dumps(EXAMPLE_CUSTOMERS, indent=2), encoding="utf-8")
         return json.loads(LOCAL_CUSTOMERS.read_text(encoding="utf-8"))
@@ -304,6 +304,8 @@ def make_pdf(record, customer):
 
 
 def share_component(pdf_bytes, filename, invoice_no, language):
+    filename = safe_filename(filename.removesuffix('.pdf')) + '.pdf'
+    invoice_no = safe_filename(invoice_no)
     encoded = base64.b64encode(pdf_bytes).decode("ascii")
     button_label = html.escape(t("share", language))
     fallback = html.escape(t("download", language))
@@ -372,8 +374,8 @@ def export_xlsx(rows):
 def login_gate(language):
     pin = str(cfg("APP_PIN", ""))
     if not pin:
-        st.warning("APP_PIN is not configured. Add it before sharing the public app.")
-        return True
+        st.error("Set APP_PIN in Streamlit Secrets before using this app.")
+        return False
     if st.session_state.get("authenticated"):
         return True
     st.title(t("title", language))
@@ -440,6 +442,9 @@ def main():
 
     st.header(t("new", language))
     customers = store.customers()
+    if not customers:
+        st.info("Add your first customer using the menu.")
+        return
     names = [item["name"] for item in customers]
     selected_name = st.selectbox(t("choose_customer", language), names)
     customer = next(item for item in customers if item["name"] == selected_name)
@@ -472,7 +477,7 @@ def main():
             pdf_bytes = make_pdf(record, customer)
             record["pdf_base64"] = base64.b64encode(pdf_bytes).decode("ascii")
             invoice_id = store.save_invoice(record)
-            filename = f"{safe_filename(customer['name'])}_{invoice_no}_{invoice_date.strftime('%d-%b-%y')}.pdf"
+            filename = f"{safe_filename(customer['name'])}_{safe_filename(invoice_no)}_{invoice_date.strftime('%d-%b-%y')}.pdf"
             st.success(f"Invoice {invoice_no} saved successfully.")
             st.download_button(t("download", language), pdf_bytes, filename, "application/pdf", key=f"download-{invoice_id}")
             share_component(pdf_bytes, filename, invoice_no, language)
